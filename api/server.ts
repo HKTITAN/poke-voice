@@ -1,5 +1,5 @@
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 
 import { elevenlabs, elevenlabsBinary } from "../lib/elevenlabs.js";
@@ -42,11 +42,23 @@ const OUTPUT_FORMATS = [
 
 const OutputFormat = z.enum(OUTPUT_FORMATS);
 
-function getApiKey(extra: { authInfo?: AuthInfo }): string {
-  return requireApiKey(extra.authInfo?.token);
+type RequestContext = { apiKey?: string };
+const requestStore = new AsyncLocalStorage<RequestContext>();
+
+function getApiKey(): string {
+  return requireApiKey(requestStore.getStore()?.apiKey);
 }
 
-const handler = createMcpHandler((server) => {
+function extractBearerToken(req: Request): string | undefined {
+  const auth = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+  const m = /^Bearer\s+(.+)$/i.exec(auth.trim());
+  if (m) return m[1]!.trim();
+  const xi = req.headers.get("x-api-key") ?? req.headers.get("X-API-Key");
+  if (xi) return xi.trim();
+  return undefined;
+}
+
+const mcpHandler = createMcpHandler((server) => {
   // ---------- text_to_speech ----------
   server.tool(
     "text_to_speech",
@@ -66,7 +78,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         if (args.voice_id && args.voice_name) {
           throw new Error("Provide only one of voice_id or voice_name.");
         }
@@ -143,7 +155,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const audio = await loadAudio(args);
         const mp = await buildMultipart({
           model_id: "scribe_v1",
@@ -193,7 +205,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const outputFormat = args.output_format ?? "mp3_44100_128";
         const { bytes } = await elevenlabsBinary(apiKey, `/v1/sound-generation`, {
           query: { output_format: outputFormat },
@@ -230,7 +242,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs<{
           voices: Array<{ voice_id: string; name: string; category?: string; description?: string }>;
         }>(apiKey, `/v1/voices`, {
@@ -260,7 +272,7 @@ const handler = createMcpHandler((server) => {
   // ---------- list_models ----------
   server.tool("list_models", "List all available ElevenLabs models.", {}, async (_args, extra) => {
     try {
-      const apiKey = getApiKey(extra);
+      const apiKey = getApiKey();
       const res = await elevenlabs<
         Array<{ model_id: string; name: string; languages?: Array<{ language_id: string; name: string }> }>
       >(apiKey, `/v1/models`);
@@ -291,7 +303,7 @@ const handler = createMcpHandler((server) => {
     { voice_id: z.string() },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/voices/${args.voice_id}`);
         return { content: [textContent(JSON.stringify(res, null, 2))] };
       } catch (e) {
@@ -319,7 +331,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const fields: Record<string, string | { buffer: Buffer; filename: string; contentType: string } | undefined> = {
           name: args.name,
           description: args.description,
@@ -380,7 +392,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const audio = await loadAudio(args);
         const mp = await buildMultipart({
           audio: { buffer: audio.buffer, filename: audio.filename, contentType: audio.contentType },
@@ -413,7 +425,7 @@ const handler = createMcpHandler((server) => {
     {},
     async (_args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/user/subscription`);
         return { content: [textContent(JSON.stringify(res, null, 2))] };
       } catch (e) {
@@ -447,7 +459,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const voiceId = args.voice_id ?? DEFAULT_VOICE_ID;
         const conversation_config = {
           agent: {
@@ -511,7 +523,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const provided = [
           args.url,
           args.text,
@@ -590,7 +602,7 @@ const handler = createMcpHandler((server) => {
   // ---------- list_agents ----------
   server.tool("list_agents", "List all Conversational AI agents.", {}, async (_args, extra) => {
     try {
-      const apiKey = getApiKey(extra);
+      const apiKey = getApiKey();
       const res = await elevenlabs<{ agents: Array<{ agent_id: string; name: string }> }>(
         apiKey,
         `/v1/convai/agents`,
@@ -613,7 +625,7 @@ const handler = createMcpHandler((server) => {
     { agent_id: z.string() },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/convai/agents/${args.agent_id}`);
         return { content: [textContent(JSON.stringify(res, null, 2))] };
       } catch (e) {
@@ -629,7 +641,7 @@ const handler = createMcpHandler((server) => {
     { conversation_id: z.string() },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/convai/conversations/${args.conversation_id}`);
         return { content: [textContent(JSON.stringify(res, null, 2))] };
       } catch (e) {
@@ -651,7 +663,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/convai/conversations`, {
           query: {
             agent_id: args.agent_id,
@@ -682,7 +694,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         if (args.voice_id && args.voice_name) {
           throw new Error("Provide only one of voice_id or voice_name.");
         }
@@ -741,7 +753,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs<{
           previews: Array<{ generated_voice_id: string; audio_base_64: string; media_type?: string }>;
         }>(apiKey, `/v1/text-to-voice/create-previews`, {
@@ -782,7 +794,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs<{ voice_id: string; name?: string }>(
           apiKey,
           `/v1/text-to-voice/create-voice-from-preview`,
@@ -818,7 +830,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const list = await elevenlabs<Array<{ phone_number_id: string; provider: string }>>(
           apiKey,
           `/v1/convai/phone-numbers`,
@@ -863,7 +875,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/shared-voices`, {
           query: {
             search: args.search,
@@ -885,7 +897,7 @@ const handler = createMcpHandler((server) => {
     {},
     async (_args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const res = await elevenlabs(apiKey, `/v1/convai/phone-numbers`);
         return { content: [textContent(JSON.stringify(res, null, 2))] };
       } catch (e) {
@@ -906,7 +918,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         if (!args.prompt && !args.composition_plan) {
           throw new Error("Provide either prompt or composition_plan.");
         }
@@ -953,7 +965,7 @@ const handler = createMcpHandler((server) => {
     },
     async (args, extra) => {
       try {
-        const apiKey = getApiKey(extra);
+        const apiKey = getApiKey();
         const body: Record<string, unknown> = { prompt: args.prompt };
         if (args.music_length_ms !== undefined) body.music_length_ms = args.music_length_ms;
         if (args.source_composition_plan)
@@ -967,31 +979,19 @@ const handler = createMcpHandler((server) => {
   );
 });
 
-// Accept any non-empty bearer token as the ElevenLabs API key.
-// Users paste their key directly into Poke's MCP auth field.
-const verifyToken = async (
-  _req: Request,
-  bearerToken?: string,
-): Promise<AuthInfo | undefined> => {
-  const token = (bearerToken ?? "").trim();
-  if (!token) {
-    // Allow env-var fallback for single-tenant deployments.
-    if (process.env.ELEVENLABS_API_KEY) {
-      return {
-        token: process.env.ELEVENLABS_API_KEY,
-        scopes: [],
-        clientId: "env",
-      };
-    }
-    return undefined;
-  }
-  return { token, scopes: [], clientId: "byo" };
-};
-
-const authHandler = withMcpAuth(handler, verifyToken, {
-  required: !process.env.ELEVENLABS_API_KEY,
-});
+// Wrap the mcp-handler so we can read the caller's bearer token out of the
+// incoming Request headers and stash it in AsyncLocalStorage for every tool
+// to read. This mirrors the simple "API key via Authorization: Bearer"
+// pattern used by Poke's official weather-api example
+// (https://github.com/InteractionCo/poke-mcp-examples/tree/main/weather-api).
+// We deliberately do NOT use withMcpAuth / MCP's OAuth protected-resource
+// discovery, because Poke does not follow that flow — it just sends the raw
+// bearer token on every request. Using withMcpAuth caused listTools to work
+// but every tool call to fail with authorization errors.
+async function handler(req: Request): Promise<Response> {
+  const token = extractBearerToken(req) ?? process.env.ELEVENLABS_API_KEY;
+  return requestStore.run({ apiKey: token }, () => mcpHandler(req));
+}
 
 export { handler };
-
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+export { handler as GET, handler as POST, handler as DELETE };
