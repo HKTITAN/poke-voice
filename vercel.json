@@ -1,5 +1,8 @@
 {
   "rewrites": [
+    { "source": "/authorize", "destination": "/api/authorize" },
+    { "source": "/token", "destination": "/api/token" },
+    { "source": "/.well-known/:path*", "destination": "/api/.well-known/:path*" },
     { "source": "/((?!authorize(?:/|$)|token(?:/|$)|\\.well-known(?:/|$)).*)", "destination": "/api/server" }
   ],
   "functions": {
