@@ -8,6 +8,15 @@
   "functions": {
     "api/server.ts": {
       "maxDuration": 300
+    },
+    "api/authorize.ts": {
+      "maxDuration": 300
+    },
+    "api/token.ts": {
+      "maxDuration": 300
+    },
+    "api/.well-known/oauth-protected-resource.ts": {
+      "maxDuration": 300
     }
   }
 }
