@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "vercel dev",
-    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test-client": "node scripts/test-client.mjs"
   },
   "dependencies": {
