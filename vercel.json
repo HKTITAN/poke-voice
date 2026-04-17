@@ -1,5 +1,10 @@
 {
-  "rewrites": [{ "source": "/(.+)", "destination": "/api/server" }],
+  "rewrites": [
+    { "source": "/authorize", "destination": "/authorize" },
+    { "source": "/token", "destination": "/token" },
+    { "source": "/.well-known/:path*", "destination": "/.well-known/:path*" },
+    { "source": "/(.+)", "destination": "/api/server" }
+  ],
   "functions": {
     "api/server.ts": {
       "maxDuration": 300
