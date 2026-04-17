@@ -1,9 +1,6 @@
 {
-  "rewrites": [
-    { "source": "/authorize", "destination": "/authorize" },
-    { "source": "/token", "destination": "/token" },
-    { "source": "/.well-known/:path*", "destination": "/.well-known/:path*" },
-    { "source": "/(.+)", "destination": "/api/server" }
+  "routes": [
+    { "src": "/((?!authorize(?:/|$)|token(?:/|$)|\\.well-known(?:/|$)).*)", "dest": "/api/server" }
   ],
   "functions": {
     "api/server.ts": {
