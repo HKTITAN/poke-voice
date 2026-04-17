@@ -1,21 +1,12 @@
 {
   "rewrites": [
-    { "source": "/authorize", "destination": "/api/authorize" },
-    { "source": "/token", "destination": "/api/token" },
-    { "source": "/.well-known/:path*", "destination": "/api/.well-known/:path*" },
-    { "source": "/((?!authorize(?:/|$)|token(?:/|$)|\\.well-known(?:/|$)).*)", "destination": "/api/server" }
+    {
+      "source": "/(.*)",
+      "destination": "/api/mcp"
+    }
   ],
   "functions": {
-    "api/server.ts": {
-      "maxDuration": 300
-    },
-    "api/authorize.ts": {
-      "maxDuration": 300
-    },
-    "api/token.ts": {
-      "maxDuration": 300
-    },
-    "api/.well-known/oauth-protected-resource.ts": {
+    "api/mcp.ts": {
       "maxDuration": 300
     }
   }
