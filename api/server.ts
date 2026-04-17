@@ -992,4 +992,6 @@ const authHandler = withMcpAuth(handler, verifyToken, {
   required: !process.env.ELEVENLABS_API_KEY,
 });
 
+export { handler };
+
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };
